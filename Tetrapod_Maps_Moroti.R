@@ -532,21 +532,15 @@ for(i in 1:length(SppRichPerDecade_list)){
   SppRichPerDecade_list[[i]] <- merge(x = SppRichPerDecade_list[[i]],
                                       y = grid_id,
                                       by = "Cell_Id110")
-  #SppRichPerDecade_list[[i]] <- SppRichPerDecade_list[[i]][!is.na(SppRichPerDecade_list[[i]]$wwf_realm),]
-  
 }
-
-View(SppRichPerDecade_list[[1]])
 
 for(i in 1:length(CurrentRich_list)){
   CurrentRich_list[[i]] <- merge(x = CurrentRich_list[[i]],
                                  y = grid_id,
                                  by = "Cell_Id110")
-  #CurrentRich_list[[i]] <- CurrentRich_list[[i]][!is.na(CurrentRich_list[[i]]$wwf_realm),]
 }
-#,
-#all.x = TRUE
 
+# correlation between groups and realms
 CorrOutput_list <- list()
 
 for (j in 1:length(SppRichPerDecade_list)) {
@@ -627,6 +621,7 @@ combined_data <- rbind(CorrOutput_Amphibia,
 # Escolhendo a paleta
 palette_colors <- RColorBrewer::brewer.pal(7, "Set2")
 
+# correlation plots
 ggplot(combined_data, aes(x=LastYear, y=PearsonCorr, color=Realm)) + 
   # Adiciona símbolos de ponto
   geom_point(size = 3, aes(fill=Realm), shape = 21) +
@@ -659,6 +654,72 @@ ggplot(combined_data, aes(x=LastYear, y=PearsonCorr, color=Realm)) +
   # Divide os gráficos por grupo
   facet_wrap(~ Group, ncol = 2)
 
+View(combined_data)
+
+# Merge with spatial data
+SppRich1800_Amphibians <- merge(x = grid_cells_sf, 
+                       y = SppRichPerDecade_Amphibians[LastYear == 1850, ], 
+                       by = "Cell_Id110", 
+                       all.y = T)
+
+# Build the spatial plot:
+ggplot2::ggplot() +
+  
+  # Add the shapefile layer with cell colour informed by 'SppRichness' variable:
+  geom_sf(data=SppRich1800_Amphibians, aes(fill=SppRichness), colour=NA) +
+  
+  # Specify the color ramp:
+  scale_fill_gradientn(colours= viridis::viridis(n = 100, option = "plasma",
+                                                 direction = 1), 
+                       na.value='white', breaks=scales::extended_breaks(4)) +
+  
+  # Add polygon boundaries for the wwf realms:
+  geom_sf(data=wwf_realms, fill=NA, colour="black", size=0.1)+
+  
+  # Specify other aesthetics:
+  theme(axis.line=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title=element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        panel.background=element_blank(), 
+        plot.background=element_rect(fill="white"),
+        plot.margin=unit(c(-0.5, 0, 0, 0), "cm"),  # top, right, bottom, left (force the plot on the top part of the panel)
+        panel.spacing=unit(c(0, 0, 0, 0), "cm"),  # top, right, bottom, left
+        panel.border=element_blank(),
+        legend.justification=c(0.5, 1),
+        legend.position=c(0.6, 0.15),
+        legend.direction="horizontal",
+        legend.title=element_text(size=12, hjust=0.5),
+        legend.text=element_text(size=10, hjust=0.5),
+        legend.background=element_blank()
+  ) +
+  
+  # Aesthetics for legend colour bar:
+  guides(fill=guide_colourbar(nbin=15, 
+                              barwidth=15, 
+                              barheight=1, 
+                              draw.ulim=T, 
+                              draw.llim=T, 
+                              title=bquote('Species richess'),
+                              label=T, 
+                              title.position = "top", 
+                              title.hjust = 0.5, 
+                              label.position="bottom", 
+                              label.hjust=0.5,
+                              frame.colour="black",
+                              frame.linewidth=0.1,
+                              ticks.linewidth=0.2,
+                              ticks=T,
+                              ticks.colour="black"))
+
+# Visualize the plot:
+#dir.create("Figures", showWarnings = FALSE)
+#ggsave(filename="Figures/Map.png", plot=MyMap, width=12, height=8, units="in",
+#       bg="white", limitsize=F)
+#ggsave(filename="Figures/Map.pdf", plot=MyMap, width=12, height=8, units="in", 
+#       bg="white", limitsize=F)
 
 
 # STEP 4 - COMPUTE THE AMOUNT OF CHANGES ACROSS TOP-RICHNESS ASSEMBLAGES ----
