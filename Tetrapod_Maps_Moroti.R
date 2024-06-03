@@ -230,10 +230,10 @@ for(i in 1:length(LastYear)){
 #SppRichPerDecade_Amphibians <- data.table::rbindlist(SppRichPerDecade_Amphibians)
 
 # Save .RData
-SppRichPerDecade_Amphibians <- as.data.frame(SppRichPerDecade_Amphibians)
-SppRichPerDecade_Reptiles <- as.data.frame(SppRichPerDecade_Reptiles)
-SppRichPerDecade_Birds <- as.data.frame(SppRichPerDecade_Birds)
-SppRichPerDecade_Mammals <- as.data.frame(SppRichPerDecade_Mammals)
+#SppRichPerDecade_Amphibians <- as.data.frame(SppRichPerDecade_Amphibians)
+#SppRichPerDecade_Reptiles <- as.data.frame(SppRichPerDecade_Reptiles)
+#SppRichPerDecade_Birds <- as.data.frame(SppRichPerDecade_Birds)
+#SppRichPerDecade_Mammals <- as.data.frame(SppRichPerDecade_Mammals)
 
 # Extract a separated data.frame holding the species richness values
 # for the current period:
@@ -654,9 +654,7 @@ ggplot(combined_data, aes(x=LastYear, y=PearsonCorr, color=Realm)) +
   # Divide os gráficos por grupo
   facet_wrap(~ Group, ncol = 2)
 
-View(combined_data)
-
-# Merge with spatial data
+# TODO Merge with spatial data
 SppRich1800_Amphibians <- merge(x = grid_cells_sf, 
                        y = SppRichPerDecade_Amphibians[LastYear == 1850, ], 
                        by = "Cell_Id110", 
@@ -721,8 +719,17 @@ ggplot2::ggplot() +
 #ggsave(filename="Figures/Map.pdf", plot=MyMap, width=12, height=8, units="in", 
 #       bg="white", limitsize=F)
 
+# STEP 4 - COMPUTE GLOBAL SPECIES RICHNESS THROUGH THE TIME FOR EACH REALM ----
+rm(list=ls()); gc()
+# Load the TetrapodTraits database:
+TetraData<-data.table::fread("Datasets/TetrapodTraits_1.0.0.csv")
 
-# STEP 4 - COMPUTE THE AMOUNT OF CHANGES ACROSS TOP-RICHNESS ASSEMBLAGES ----
+TetraData <- TetraData %>% select(
+  "Scientific.Name", "YearOfDescription", "Afrotropic", "Australasia", 
+  "IndoMalay", "Nearctic", "Neotropic", "Oceania", "Palearctic", "Antarctic"
+)
+
+# STEP 5 - COMPUTE THE AMOUNT OF CHANGES ACROSS TOP-RICHNESS ASSEMBLAGES ----
 ##########################################################################################################################
 # STEP 3 - COMPUTE THE AMOUNT OF CHANGES ACROSS TOP-RICHNESS ASSEMBLAGES
 rm(list=ls()); gc()
