@@ -62,7 +62,7 @@ grid_cells_sf <- merge(x = grid_cells_sf,
 equalareaproj <- raster::crs(grid_cells_sf)
 
 # Load shapefile on the study area and convert to an equal-area projection:
-wwf_realms <- sf::read_sf(dsn="Shapefiles/", layer='wwf_realms')  
+wwf_realms <- sf::read_sf(dsn="Shapefiles/", layer='wwf_realms') 
 wwf_realms <- sf::st_transform(wwf_realms, crs=equalareaproj)
 
 # To simplify visualization, omit the Antarctic boundaries 
@@ -134,6 +134,7 @@ ggsave(filename="Figures/Map.png", plot=MyMap, width=12, height=8, units="in",
        bg="white", limitsize=F)
 ggsave(filename="Figures/Map.pdf", plot=MyMap, width=12, height=8, units="in", 
        bg="white", limitsize=F)
+
 
 
 # STEP 2 - COMPUTE THE CORRELATION BETWEEN CURRENT SPECIES RICHNESS AND HISTORICAL RICHNESS ----
@@ -224,10 +225,10 @@ for(i in 1:length(LastYear)){
 # rm(TetraData, vert_assemblages)
 
 # Unlist in different data.frame:
-#SppRichPerDecade_Mammals <- data.table::rbindlist(SppRichPerDecade_Mammals)
-#SppRichPerDecade_Birds <- data.table::rbindlist(SppRichPerDecade_Birds)
-#SppRichPerDecade_Reptiles <- data.table::rbindlist(SppRichPerDecade_Reptiles )
-#SppRichPerDecade_Amphibians <- data.table::rbindlist(SppRichPerDecade_Amphibians)
+SppRichPerDecade_Mammals <- data.table::rbindlist(SppRichPerDecade_Mammals)
+SppRichPerDecade_Birds <- data.table::rbindlist(SppRichPerDecade_Birds)
+SppRichPerDecade_Reptiles <- data.table::rbindlist(SppRichPerDecade_Reptiles )
+SppRichPerDecade_Amphibians <- data.table::rbindlist(SppRichPerDecade_Amphibians)
 
 # Save .RData
 #SppRichPerDecade_Amphibians <- as.data.frame(SppRichPerDecade_Amphibians)
@@ -253,18 +254,27 @@ CurrentRichMammals <- SppRichPerDecade_Mammals[
   SppRichPerDecade_Mammals$LastYear == 2015,
   c(1:2)]
 
-# criando vetor com as celulas preenchidas com celulas presentes na riqueza atual
-# 2015
+# checando celulas duplicadas
+any(duplicated(CurrentRichAmphibia$Cell_Id110))
+any(duplicated(CurrentRichReptiles$Cell_Id110))
+any(duplicated(CurrentRichBirds$Cell_Id110))
+any(duplicated(CurrentRichMammals$Cell_Id110))
+
+# criando vetor com as celulas preenchidas com celulas 
+# presentes na riqueza atual 2015
 id_amp <- CurrentRichAmphibia$Cell_Id110
 id_rep <- CurrentRichReptiles$Cell_Id110
 id_birds <- CurrentRichBirds$Cell_Id110
 id_mammals <- CurrentRichMammals$Cell_Id110
 
 # gerar para cada Cell uma replica de cada um dos 44 anos (LastYear)
-id_amp <- gerar_dataframe_anos(id_amp, LastYear)
-id_rep <- gerar_dataframe_anos(id_rep, LastYear)
-id_birds <- gerar_dataframe_anos(id_birds, LastYear)
-id_mammals <- gerar_dataframe_anos(id_mammals, LastYear)
+# funcao criada para adicionar os anos que faltam nas celulas presentes
+# para isso, precisa definir um vetor (LastYear) com os anos de interesse
+source("gerar_anos_faltantes.R")
+id_amp <- gerar_anos_faltantes(id_amp, LastYear)
+id_rep <- gerar_anos_faltantes(id_rep, LastYear)
+id_birds <- gerar_anos_faltantes(id_birds, LastYear)
+id_mammals <- gerar_anos_faltantes(id_mammals, LastYear)
 
 # o numero de linhas presentes (2015) vezes 44 tem que ser igual o numero de 
 # linhas unicas em 2015 - 
@@ -280,30 +290,12 @@ names(CurrentRichReptiles) <- c("Cell_Id110", "CurrentRichness")
 names(CurrentRichBirds) <- c("Cell_Id110", "CurrentRichness")
 names(CurrentRichMammals) <- c("Cell_Id110", "CurrentRichness")
 
-# checando celulas duplicadas
-any(duplicated(CurrentRichAmphibia$Cell_Id110))
-any(duplicated(CurrentRichReptiles$Cell_Id110))
-any(duplicated(CurrentRichBirds$Cell_Id110))
-any(duplicated(CurrentRichMammals$Cell_Id110))
-
-id_amp <- CurrentRichAmphibia$Cell_Id110
-id_rep <- CurrentRichReptiles$Cell_Id110
-id_birds <- CurrentRichBirds$Cell_Id110
-id_mammals <- CurrentRichMammals$Cell_Id110
-
 # criando as celulas dos anos que nao haviam especies descritas no passado
 # por exemplo, o primeiro ano da celula 18173 eh em 1835, pq os anos anteriores
 # nao haviam especies descritas nessa celula, so recebendo a primeira spp em 1835
 # por isso elas nao foram computadas com riqueza 0 nos anos anteriores
 sum(SppRichPerDecade_Amphibians$Cell_Id110 == 18173) # tem que ter 44 repeticoes
 # pois sao 44 repeticoes em LastYear
-
-# funcao criada para adicionar os anos que faltam nas celulas presentes
-# para isso, precisa definir um vetor (LastYear) com os anos de interesse
-id_amp <- gerar_anos_faltantes(id_amp, LastYear)
-id_rep <- gerar_anos_faltantes(id_rep, LastYear)
-id_birds <- gerar_anos_faltantes(id_birds, LastYear)
-id_mammals <- gerar_anos_faltantes(id_mammals, LastYear)
 
 SppRichPerDecade_Amphibians <- full_join(
   id_amp,
@@ -479,6 +471,8 @@ save(CurrentRichAmphibia,
      CurrentRichMammals,
      file = "Datasets/CurrentRichness.RData")
 
+
+
 # STEP 3 - COMPUTE THE CORRELATION OF WWF REALMS ACROSS TETRAPODS ####
 rm(list=ls()); gc()
 load("Datasets/SppRichPerDecade.RData")
@@ -505,7 +499,7 @@ grid_cells_sf <- grid_cells_sf[!is.na(grid_cells_sf$WWF_Realm) &
 
 # For better mapping aesthetics, perform the spatial intersection 
 # between grid_cells_sf and wwf_realms:
-grid_cells_sf <- sf::st_intersection(wwf_realms, grid_cells_sf) 
+# grid_cells_sf <- sf::st_intersection(wwf_realms, grid_cells_sf) 
 # add wwf_realm to id grids
 grid_id <- sf::st_drop_geometry(grid_cells_sf)[,c("Cell_Id110", "WWF_Realm")]
 
@@ -618,11 +612,15 @@ combined_data <- rbind(CorrOutput_Amphibia,
                        CorrOutput_Birds, 
                        CorrOutput_Mammals)
 
+# Save correlations dataset 
+save(combined_data,
+     file = "Datasets/CorrelationsPerDecadePerRealms.RData")
+
 # Escolhendo a paleta
-palette_colors <- RColorBrewer::brewer.pal(7, "Set2")
+palette_colors <- RColorBrewer::brewer.pal(6, "Set2")
 
 # correlation plots
-ggplot(combined_data, aes(x=LastYear, y=PearsonCorr, color=Realm)) + 
+CorrelationTime <- ggplot(combined_data, aes(x=LastYear, y=PearsonCorr, color=Realm)) + 
   # Adiciona símbolos de ponto
   geom_point(size = 3, aes(fill=Realm), shape = 21) +
   
@@ -654,80 +652,184 @@ ggplot(combined_data, aes(x=LastYear, y=PearsonCorr, color=Realm)) +
   # Divide os gráficos por grupo
   facet_wrap(~ Group, ncol = 2)
 
-# TODO Merge with spatial data
-SppRich1800_Amphibians <- merge(x = grid_cells_sf, 
-                       y = SppRichPerDecade_Amphibians[LastYear == 1850, ], 
-                       by = "Cell_Id110", 
-                       all.y = T)
+ggsave(filename="Figures/Scatterplot_RichnessCorrelationAcrossTime_realms.png",
+       plot=CorrelationTime, width=6, height=5, units="in", bg="white", limitsize=F)
 
-# Build the spatial plot:
-ggplot2::ggplot() +
-  
-  # Add the shapefile layer with cell colour informed by 'SppRichness' variable:
-  geom_sf(data=SppRich1800_Amphibians, aes(fill=SppRichness), colour=NA) +
-  
-  # Specify the color ramp:
-  scale_fill_gradientn(colours= viridis::viridis(n = 100, option = "plasma",
-                                                 direction = 1), 
-                       na.value='white', breaks=scales::extended_breaks(4)) +
-  
-  # Add polygon boundaries for the wwf realms:
-  geom_sf(data=wwf_realms, fill=NA, colour="black", size=0.1)+
-  
-  # Specify other aesthetics:
-  theme(axis.line=element_blank(),
-        axis.text=element_blank(),
-        axis.ticks=element_blank(),
-        axis.title=element_blank(),
-        panel.grid.minor=element_blank(),
-        panel.grid.major=element_blank(),
-        panel.background=element_blank(), 
-        plot.background=element_rect(fill="white"),
-        plot.margin=unit(c(-0.5, 0, 0, 0), "cm"),  # top, right, bottom, left (force the plot on the top part of the panel)
-        panel.spacing=unit(c(0, 0, 0, 0), "cm"),  # top, right, bottom, left
-        panel.border=element_blank(),
-        legend.justification=c(0.5, 1),
-        legend.position=c(0.6, 0.15),
-        legend.direction="horizontal",
-        legend.title=element_text(size=12, hjust=0.5),
-        legend.text=element_text(size=10, hjust=0.5),
-        legend.background=element_blank()
-  ) +
-  
-  # Aesthetics for legend colour bar:
-  guides(fill=guide_colourbar(nbin=15, 
-                              barwidth=15, 
-                              barheight=1, 
-                              draw.ulim=T, 
-                              draw.llim=T, 
-                              title=bquote('Species richess'),
-                              label=T, 
-                              title.position = "top", 
-                              title.hjust = 0.5, 
-                              label.position="bottom", 
-                              label.hjust=0.5,
-                              frame.colour="black",
-                              frame.linewidth=0.1,
-                              ticks.linewidth=0.2,
-                              ticks=T,
-                              ticks.colour="black"))
-
-# Visualize the plot:
-#dir.create("Figures", showWarnings = FALSE)
-#ggsave(filename="Figures/Map.png", plot=MyMap, width=12, height=8, units="in",
-#       bg="white", limitsize=F)
-#ggsave(filename="Figures/Map.pdf", plot=MyMap, width=12, height=8, units="in", 
-#       bg="white", limitsize=F)
 
 # STEP 4 - COMPUTE GLOBAL SPECIES RICHNESS THROUGH THE TIME FOR EACH REALM ----
 rm(list=ls()); gc()
+
 # Load the TetrapodTraits database:
 TetraData<-data.table::fread("Datasets/TetrapodTraits_1.0.0.csv")
 
-TetraData <- TetraData %>% select(
-  "Scientific.Name", "YearOfDescription", "Afrotropic", "Australasia", 
-  "IndoMalay", "Nearctic", "Neotropic", "Oceania", "Palearctic", "Antarctic"
-)
+# Filter columns of intereset:
+TetraData <- TetraData[,. (Scientific.Name, YearOfDescription, TreeTaxon,
+                           Afrotropic, Australasia, IndoMalay, Nearctic, Neotropic, Palearctic)]
+
+# Melt
+TetraData_long<-reshape2::melt(TetraData, 
+                               id.vars= c("Scientific.Name",
+                                          "YearOfDescription",
+                                          "TreeTaxon"),
+                               variable.name="WWF_Realm",
+                               value.name="Realm_Prop")
+
+# Keep only Realm-Species combinations that actually exists (Realm_Prop > 0):
+TetraData_long <- TetraData_long[!is.na(TetraData_long$Realm_Prop) & 
+                                   TetraData_long$Realm_Prop>0,]
+unique(TetraData_long$TreeTaxon)
+
+# Replace "Squamates" and "TurtCroc" to "Reptilia
+TetraData_long$TreeTaxon <- gsub("Squamates", "Reptiles",
+                                 TetraData_long$TreeTaxon)
+
+TetraData_long$TreeTaxon <- gsub("TurtCroc", "Reptiles",
+                                 TetraData_long$TreeTaxon)
+
+any(is.na(TetraData_long)) # uma especie sem o ano de descricao
+# View(TetraData_long)
+
+# Compute assemblage-level metrics, including richness and average description year for species within grid cells:
+# TetraData_long<-data.table::as.data.table(TetraData_long)
+
+# Get the cumulative richness per year and realm:
+# Years
+LastYear <- seq(1800, 2015, by = 5)
+
+# Create an empty list to store the ouput of the for loop ahead:
+SppRichPerDecade <- list()
+
+# Compute the assemblage-level species richness using species 
+# described until different ending periods:
+for(i in 1:length(LastYear)){
+  
+  data_subset <- TetraData_long[
+    TetraData_long$YearOfDescription <= LastYear[i] &
+      !is.na(TetraData_long$YearOfDescription),
+  ]
+  
+  # Compute assemblage-level metrics, including richness and 
+  # average description year for species within grid cells:
+  data_subset <- data_subset %>%
+    dplyr::group_by(TreeTaxon, WWF_Realm) %>% 
+    dplyr::summarise(n = n())
+  
+  # Add a new column informing the ending period used of species descriptions:
+  data_subset$LastYear <- LastYear[i]
+  
+  # armazena na lista
+  SppRichPerDecade[[i]] <- data_subset
+  
+} # end of i for loop
+
+SppRichPerDecade <- data.table::rbindlist(SppRichPerDecade)
+
+# Correlations
+load("Datasets/CorrelationsPerDecadePerRealms.RData")
+
+combined_data <- combined_data %>% 
+  dplyr::rename(TreeTaxon = Group,
+                WWF_Realm = Realm) %>%
+  mutate(TreeTaxon = str_replace_all(
+    TreeTaxon, c("Amphibia" = "Amphibians")))
+
+SppRich_Correlation <- left_join(
+  SppRichPerDecade,
+  combined_data,
+  by = c("TreeTaxon", "LastYear", "WWF_Realm"))
+
+# Transform in % proportion 
+CurrentRichness <- SppRich_Correlation[
+  SppRich_Correlation$LastYear ==2015, 
+  ][,1:3] %>%
+  dplyr::rename(TotalRichness = n)
+
+SppRich_Correlation_prop <- full_join(
+  SppRich_Correlation,
+  CurrentRichness,
+  by=c("TreeTaxon", "WWF_Realm")) %>%
+  mutate(ProportionKnowledge = (n * 100) / TotalRichness)
+
+# Plot
+# Escolhendo a paleta
+palette_colors <- RColorBrewer::brewer.pal(6, "Set2")
+
+# correlation plots
+Proportion_realms <- ggplot(SppRich_Correlation_prop, aes(x=ProportionKnowledge,
+                                                          y=PearsonCorr, 
+                                                          color=WWF_Realm)) + 
+  # Adiciona símbolos de ponto
+  geom_point(size = 3, aes(fill=WWF_Realm), shape = 21) +
+  
+  # Adiciona uma linha conectando os símbolos de ponto
+  geom_line(aes(group=WWF_Realm)) +
+  
+  # Especifica as legendas
+  ylab(bquote('Correlation between richness patterns')) + 
+  xlab(bquote('Richness accumulation over time (%)')) +
+  
+  # Outras estéticas
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        plot.margin = unit(c(0.2, 0, 0, 0), "cm"), # top right bottom left
+        axis.line = element_line(colour="black"),
+        axis.ticks = element_line(colour="black"),
+        axis.text.y = element_text(size=10, colour="black"),
+        axis.text.x = element_text(size=10, colour="black", hjust=0.5),
+        axis.title = element_text(size=12, 
+                                  margin=ggplot2::margin(t=0, r=5, b=0, l=0),
+                                  colour="black", face="bold"),
+        legend.position="right") +
+  scale_fill_manual(values = palette_colors) +
+  scale_color_manual(values = palette_colors) +
+  theme_minimal_grid(12) +
+  
+  # Divide os gráficos por grupo
+  facet_wrap(~ TreeTaxon, ncol = 2)
+
+Absolute_realms <- ggplot(SppRich_Correlation_prop, aes(x=n,
+                                                        y=PearsonCorr, 
+                                                        color=WWF_Realm)) + 
+  # Adiciona símbolos de ponto
+  geom_point(size = 3, aes(fill=WWF_Realm), shape = 21) +
+  
+  # Adiciona uma linha conectando os símbolos de ponto
+  geom_line(aes(group=WWF_Realm)) +
+  
+  # Especifica as legendas
+  ylab(bquote('Correlation between richness patterns')) + 
+  xlab(bquote('Richness accumulation over time (%)')) +
+  
+  # Outras estéticas
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        plot.margin = unit(c(0.2, 0, 0, 0), "cm"), # top right bottom left
+        axis.line = element_line(colour="black"),
+        axis.ticks = element_line(colour="black"),
+        axis.text.y = element_text(size=10, colour="black"),
+        axis.text.x = element_text(size=10, colour="black", hjust=0.5),
+        axis.title = element_text(size=12, 
+                                  margin=ggplot2::margin(t=0, r=5, b=0, l=0),
+                                  colour="black", face="bold"),
+        legend.position="right") +
+  scale_fill_manual(values = palette_colors) +
+  scale_color_manual(values = palette_colors) +
+  theme_minimal_grid(12) +
+  
+  # Divide os gráficos por grupo
+  facet_wrap(~ TreeTaxon, ncol = 2)
+
+ggsave(filename="Figures/Scatterplot_AbsoluteRichnessCorrelation_realms.png",
+       plot=Absolute_realms, width=6, height=5, units="in", bg="white", limitsize=F)
+
+ggsave(filename="Figures/Scatterplot_ProportionalRichnessCorrelation_realms.png",
+       plot=Proportion_realms, width=6, height=5, units="in", bg="white", limitsize=F)
+
+
 
 # STEP 5 - COMPUTE THE AMOUNT OF CHANGES ACROSS TOP-RICHNESS ASSEMBLAGES ----
 ##########################################################################################################################

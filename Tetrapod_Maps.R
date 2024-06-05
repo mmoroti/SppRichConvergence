@@ -468,3 +468,34 @@ ggsave(filename="Figures/Scatterplot_RichnessLatitudeAcrossTime.png", plot=MyPlo
 ggsave(filename="Figures/Scatterplot_RichnessLatitudeAcrossTime.pdf", plot=MyPlot1, width=6, height=5, units="in", bg="white", limitsize=F)
 
 #####
+
+
+# STEP 5 - COMPUTE THE RICHNESS PER REALM ACROSS TIME
+##########################################################################################################################
+# STEP 5 - COMPUTE THE RICHNESS PER REALM ACROSS TIME
+rm(list=ls()); gc()
+
+# Load the TetrapodTraits database:
+TetraData<-data.table::fread("Datasets/TetrapodTraits_1.0.0.csv")
+
+# Filter columns of intereset:
+TetraData <- TetraData[,. (Scientific.Name, YearOfDescription, 
+                           Afrotropic, Antarctic, Australasia, IndoMalay, Nearctic, Neotropic, Palearctic, Oceania)]
+
+# Melt
+TetraData_long<-reshape2::melt(TetraData, 
+                               id.vars= c("Scientific.Name", "YearOfDescription"),
+                               variable.name="WWF_Realm",
+                               value.name="Realm_Prop")
+
+# Keep only Realm-Species combinations that actually exists (Realm_Prop > 0):
+TetraData_long <- TetraData_long[TetraData_long$Realm_Prop>0,]
+
+# Compute assemblage-level metrics, including richness and average description year for species within grid cells:
+TetraData_long<-as.data.table(TetraData_long)
+RealmYear_Richness <- TetraData_long[, .(SppRichness = .N), 
+                                     by = .(YearOfDescription, WWF_Realm)]
+
+# Get the cumulative richness per year and realm:
+
+
