@@ -473,6 +473,7 @@ save(CurrentRichAmphibia,
 
 
 
+
 # STEP 3 - COMPUTE THE CORRELATION OF WWF REALMS ACROSS TETRAPODS ####
 rm(list=ls()); gc()
 load("Datasets/SppRichPerDecade.RData")
@@ -656,6 +657,8 @@ ggsave(filename="Figures/Scatterplot_RichnessCorrelationAcrossTime_realms.png",
        plot=CorrelationTime, width=6, height=5, units="in", bg="white", limitsize=F)
 
 
+
+
 # STEP 4 - COMPUTE GLOBAL SPECIES RICHNESS THROUGH THE TIME FOR EACH REALM ----
 rm(list=ls()); gc()
 
@@ -831,9 +834,8 @@ ggsave(filename="Figures/Scatterplot_ProportionalRichnessCorrelation_realms.png"
 
 
 
+
 # STEP 5 - COMPUTE THE AMOUNT OF CHANGES ACROSS TOP-RICHNESS ASSEMBLAGES ----
-##########################################################################################################################
-# STEP 3 - COMPUTE THE AMOUNT OF CHANGES ACROSS TOP-RICHNESS ASSEMBLAGES
 rm(list=ls()); gc()
 
 # Load the data table on species richness per grid cell:
@@ -906,18 +908,17 @@ MyPlot1 <- ggplot(ConstancyTopCells, aes(x=LastYear, y=PropTopCells)) +
 ggsave(filename="Figures/Scatterplot_Accuracy_TopCells.png", plot=MyPlot1, width=6, height=5, units="in", bg="white", limitsize=F)
 ggsave(filename="Figures/Scatterplot_Accuracy_TopCells.pdf", plot=MyPlot1, width=6, height=5, units="in", bg="white", limitsize=F)
 
-#####
 
-# STEP 5 - COMPUTE THE CORRELATION BETWEEN HISTORICAL RICHNESS AND LATITUDE ACROSS TIME
-##########################################################################################################################
-# STEP 4 - COMPUTE THE CORRELATION BETWEEN HISTORICAL RICHNESS AND LATITUDE ACROSS TIME
+# STEP 6 - COMPUTE THE CORRELATION BETWEEN HISTORICAL RICHNESS AND LATITUDE ACROSS TIME ----
 rm(list=ls()); gc()
 
 # Load the data table on species richness per grid cell:
-SppRichPerDecade <- data.table::fread("Datasets/SppRichPerDecade.csv")
+load("Datasets/SppRichPerDecade.RData")
+load("Datasets/CurrentRichness.RData")
+#SppRichPerDecade <- data.table::fread("Datasets/SppRichPerDecade.csv")
 
 # Convert from data.table to data.frame (it will allow some filtering operations ahead):
-SppRichPerDecade <- as.data.frame(SppRichPerDecade)
+# SppRichPerDecade <- as.data.frame(SppRichPerDecade)
 
 # Load the data table on spatial features per grid cell:
 grid_cells <- sf::st_read(dsn="Shapefiles/", layer='gridcells_110km')
@@ -931,100 +932,118 @@ grid_cells <- grid_cells[grid_cells$PropLandArea > 0,]
 # Create a vector with the year indicating the ending period of species descriptions:
 LastYear <- seq(1800, 2015, by = 5)  
 
-# Compute the Pearson correlation between the historical richness and the latitude:
-CorrOutput <- list()
-for(i in 1:length(LastYear)){
-  
-  # Separate the richness values of the selected decade:
-  SppRich_LastYear <- SppRichPerDecade[ which(SppRichPerDecade$LastYear == LastYear[i]),]
-  
-  # Merge the per grid cell current richness with historical richness of the 'LastYear' i:
-  grid_cells_test <- merge(x = grid_cells,
-                           y = SppRich_LastYear,
-                           by = "Cell_Id110",
-                           all.x = TRUE)
-  
-  # Consider only cells with richness >= 1:
-  grid_cells_test <- grid_cells_test[which(grid_cells_test$SppRichness>=1),]
-  
-  # Compute the statistic metric:
-  output <- cor.test(x = sqrt(grid_cells_test$Lat^2), y = grid_cells_test$SppRichness, method = "pearson")
-  
-  # Store the statistic metrics in a data.frame, together with the LastYear assessed:
-  CorrOutput[[i]] <- data.frame ( LastYear = LastYear[i],
-                                  PearsonCorr = output$estimate,
-                                  Pvalue = output$p.value )
-  
-  # Remove unnecessary objects before next iteration:
-  rm(SppRich_LastYear, grid_cells_test, output)
-  
-} # end of i for loop
+# Criando listas para que seja possivel fazer apenas um unico for
+# aqui as ordens precisam ser as mesmas na lista 
+# amphibians > reptiles > birds > mammals
+SppRichPerDecade_list <- list(SppRichPerDecade_Amphibians, 
+                              SppRichPerDecade_Reptiles, 
+                              SppRichPerDecade_Birds,
+                              SppRichPerDecade_Mammals)
 
-# Bind the data.frame in a single list:
-CorrOutput <- rbindlist(CorrOutput)
+# riqueza presente
+CurrentRich_list <- list(CurrentRichAmphibia,
+                         CurrentRichReptiles,
+                         CurrentRichBirds,
+                         CurrentRichMammals)
 
-# Repeat the same computation above, but now correcting degrees of freedom for spatial autocorrelation:
+# Criar lista vazia
+CorrOutput_list <- list()
 SpatialCorrOutput <- list()
-for(i in 1:length(LastYear)){
-  
-  # Separate the richness values of the selected decade:
-  SppRich_LastYear <- SppRichPerDecade[ which(SppRichPerDecade$LastYear == LastYear[i]),]
-  
-  # Merge the per grid cell current richness with historical richness of the 'LastYear' i:
-  grid_cells_test <- merge(x = grid_cells,
-                           y = SppRich_LastYear,
-                           by = "Cell_Id110",
-                           all.x = TRUE)
-  
-  # Consider only cells with richness >= 1:
-  grid_cells_test <- grid_cells_test[which(grid_cells_test$SppRichness>=1),]
-  
-  # Separate a data.frame holding the geographical coordinates:
-  coords <- grid_cells_test[, c("Long", "Lat")]
-  
-  # Compute correlation with spatially corrected degrees of freedom:
-  output <- SpatialPack::modified.ttest(x = sqrt(grid_cells_test$Lat^2), 
-                                        y = grid_cells_test$SppRichness, 
-                                        coords = as.data.frame(coords),
-                                        nclass = NULL)
- 
-  # Store the statistic metrics in a data.frame, together with the LastYear assessed:
-  SpatialCorrOutput[[i]] <- data.frame ( LastYear = LastYear[i],
-                                  PearsonCorr = output$corr,
-                                  df = output$dof,
-                                  Pvalue = output$p.value )
-  
-  # Remove unnecessary objects before next iteration:
-  rm(SppRich_LastYear, coords, grid_cells_test, output)
-  
-} # end of i for loop
-SpatialCorrOutput <- rbindlist(SpatialCorrOutput)
 
-# The modified t-test only corrects degrees of freedom, and thus p-values (Pearson values are the same):
-CorrOutput$PearsonCorr
-SpatialCorrOutput$PearsonCorr
-CorrOutput$Pvalue
-SpatialCorrOutput$Pvalue
+for(j in 1:length(SppRichPerDecade_list)) {
+  
+  SppRichPerDecade <- SppRichPerDecade_list[[j]]
+  #CurrentRich <- CurrentRich_list[[j]]
+  CorrOutput <- list()  # Lista para armazenar os resultados para o conjunto atual
+  
+  for(i in 1:length(LastYear)){
+    
+    # Separe os valores de riqueza da década selecionada:
+    SppRich_LastYear <- SppRichPerDecade[which(SppRichPerDecade$LastYear == LastYear[i]),]
+    
+    # Merge the per grid cell current richness with historical richness of the 'LastYear' i:
+    grid_cells_test <- merge(x = grid_cells,
+                             y = SppRich_LastYear,
+                             by = "Cell_Id110",
+                             all.y = TRUE)
+    grid_cells_test <- grid_cells_test[complete.cases(grid_cells_test[, c("Long", "Lat")]), ]
+    # Redefina linhas com riqueza histórica igual a NA como zero:
+    if( nrow(grid_cells_test[is.na(grid_cells_test$SppRichness), ]) >= 1) {
+      grid_cells_test[is.na(grid_cells_test$SppRichness), ]$SppRichness <- 0
+    }
+    
+    # Separate a data.frame holding the geographical coordinates:
+    coords <- grid_cells_test[, c("Long", "Lat")]
+    
+    # Compute correlation with spatially corrected degrees of freedom:
+    output <- SpatialPack::modified.ttest(x = sqrt(grid_cells_test$Lat^2), 
+                                          y = grid_cells_test$SppRichness, 
+                                          coords = as.data.frame(coords),
+                                          nclass = NULL)
+    
+    # Store the statistic metrics in a data.frame, together with the LastYear assessed:
+    SpatialCorrOutput <- data.frame ( LastYear = LastYear[i],
+                                      PearsonCorr = output$corr,
+                                      df = output$dof,
+                                      Pvalue = output$p.value )
+    CorrOutput[[i]] <- SpatialCorrOutput
+    # Remove unnecessary objects before next iteration:
+    rm(SppRich_LastYear, coords, grid_cells_test, output)
+    
+  } # fim do loop i
+  
+  # Armazene os resultados para o conjunto atual na lista principal
+  CorrOutput_list[[j]] <- do.call(rbind, CorrOutput)
+  
+} # fim do loop j
 
-# Add the uncorrected p-values to the CorrOutput
-data.table::fwrite(SpatialCorrOutput, file = "Datasets/SpatialCorrOutput.csv")
-SpatialCorrOutput <- fread( "Datasets/SpatialCorrOutput.csv")
+# correlacoes de cada grupo
+CorrOutput_Amphibia <- CorrOutput_list[[1]]
+CorrOutput_Reptiles <- CorrOutput_list[[2]]
+CorrOutput_Birds <- CorrOutput_list[[3]]
+CorrOutput_Mammals <- CorrOutput_list[[4]]
 
-# Scatterplot of Pearson correlation value against year:
-MyPlot1 <- ggplot(SpatialCorrOutput, aes(x=LastYear, y=PearsonCorr)) + 
+# Combine os dados em um único dataframe
+CorrOutput_Amphibia$Group <- "Amphibia"
+CorrOutput_Reptiles$Group <- "Reptiles"
+CorrOutput_Birds$Group <- "Birds"
+CorrOutput_Mammals$Group <- "Mammals"
+
+# Combinando os dados
+combined_data <- rbind(CorrOutput_Amphibia, 
+                       CorrOutput_Reptiles,
+                       CorrOutput_Birds, 
+                       CorrOutput_Mammals)
+
+# Save correlations dataset 
+save(combined_data,
+     file = "Datasets/CorrelationsLatitudinalGradient.RData")
+
+# Adicionar uma coluna para definir o preenchimento com base no Pvalue
+combined_data$Significance <- ifelse(combined_data$Pvalue <= 0.05,
+                                     "Significant",
+                                     "Not Significant")
+
+plot_latitudial <- ggplot(combined_data,
+                          aes(x=LastYear,
+                              y=PearsonCorr,
+                              color=Group,
+                              fill=Group)) + 
   
-  # Add a line connecting the point symbols:
-  geom_line() +
+  # Pontos com preenchimento baseado na significância
+  geom_point(data = combined_data[combined_data$Significance == "Significant",],
+             size = 3, shape = 21) +
+  geom_point(data = combined_data[combined_data$Significance == "Not Significant",],
+             size = 3, shape = 21, fill = NA) +
   
-  # Add point symbols:
-  geom_point(data = SpatialCorrOutput[SpatialCorrOutput$Pvalue<=0.05], size = 3, color = "white", fill = "black", shape = 21) +
-  geom_point(data = SpatialCorrOutput[SpatialCorrOutput$Pvalue>0.05], size = 3, color = "red", fill = "white", shape = 21) +
+  # Linha conectando os pontos, colorida por grupo
+  geom_line(aes(group=Group)) +
   
-  # Specify the legend captions:
-  ylab(bquote('Strength of Richness-Latitude Relationship')) + 
+  # Especifica as legendas
+  ylab(bquote('Correlation between richness patterns')) + 
   xlab(bquote('Year')) +
   
-  # Other aesthetics:
+  # Outras estéticas
   theme(panel.grid.minor = element_blank(),
         panel.grid.major = element_blank(),
         panel.background = element_blank(),
@@ -1034,11 +1053,15 @@ MyPlot1 <- ggplot(SpatialCorrOutput, aes(x=LastYear, y=PearsonCorr)) +
         axis.ticks = element_line(colour="black"),
         axis.text.y = element_text(size=10, colour="black"),
         axis.text.x = element_text(size=10, colour="black", hjust=0.5),
-        axis.title = element_text(size=12, margin=ggplot2::margin(t=0, r=5, b=0, l=0) ,colour="black", face="bold"),
-        legend.position="none"); MyPlot1
+        axis.title = element_text(size=12, 
+                                  margin=ggplot2::margin(t=0, r=5, b=0, l=0),
+                                  colour="black", face="bold"),
+        legend.position="right") +
+  scale_fill_manual(values = palette_colors) +
+  scale_color_manual(values = palette_colors) +
+  theme_minimal_grid(12)
 
 # Export to disk:
-ggsave(filename="Figures/Scatterplot_RichnessLatitudeAcrossTime.png", plot=MyPlot1, width=6, height=5, units="in", bg="white", limitsize=F)
-ggsave(filename="Figures/Scatterplot_RichnessLatitudeAcrossTime.pdf", plot=MyPlot1, width=6, height=5, units="in", bg="white", limitsize=F)
-
-#####
+ggsave(filename="Figures/Scatterplot_RichnessLatitudeAcrossTime.png",
+       plot=plot_latitudial, width=6, height=5,
+       units="in", bg="white", limitsize=F)
