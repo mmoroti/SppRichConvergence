@@ -1065,3 +1065,68 @@ plot_latitudial <- ggplot(combined_data,
 ggsave(filename="Figures/Scatterplot_RichnessLatitudeAcrossTime.png",
        plot=plot_latitudial, width=6, height=5,
        units="in", bg="white", limitsize=F)
+
+
+# STEP 7 - HAS THE SUPPORT FOR CLASSICAL SPECIES RICHNESS DISTRIBUTION HYPOTHSES CHANGED OVER TIME? ----
+rm(list=ls()); gc()
+
+# Load the data table on species richness per grid cell:
+load("Datasets/SppRichPerDecade.RData")
+load("Datasets/CurrentRichness.RData")
+
+# Spatial attributes 
+SpatialTraits <- read.csv2("Datasets/SpatialAttributesPerCell.csv", sep =",")
+npp <- read.csv2("Datasets/npp_values.csv", sep=",")[,2:3]
+roughness <- read.csv2("Datasets/ElevRoughness_values.csv", sep = ",")[,2:3]
+
+# climate <- read.csv2("Datasets/worldclim_predictors.csv", sep=",")
+# elevation <- read.csv2("Datasets/earthenv_elevmedian.csv", sep=",")
+SpatialAttributesPerCell <- left_join(
+  x = roughness,
+  y = npp,
+  by = "ID"
+)
+
+SpatialAttributesPerCell <- left_join(
+  x = SpatialTraits[,c("Cell_Id110", "AnnuMeanTemp", "AnnuPrecip")],
+  y = SpatialAttributesPerCell,
+  by = c("Cell_Id110" = "ID")
+) %>%
+  rename("roughness" = "roughness_5KMmd_GMTEDmd")
+
+head(SpatialAttributesPerCell)
+
+# add spatial attributes to spp list
+SppRichPerDecade_list <- list(SppRichPerDecade_Amphibians, 
+                              SppRichPerDecade_Reptiles, 
+                              SppRichPerDecade_Birds,
+                              SppRichPerDecade_Mammals)
+
+# adicionando informacao dos atributos espaciais
+# tambem adicionando tratamento: adicionamos NA's aos espacos em branco e
+# removemos as linhas que nao tem dados climaticos ou de produtividade
+# depois preenchemos com zero os NA's da riqueza de especies
+for(i in 1:length(SppRichPerDecade_list)){
+  SppRichPerDecade_list[[i]] <- left_join(
+    x = SppRichPerDecade_list[[i]],
+    y = SpatialAttributesPerCell,
+    by = "Cell_Id110"
+    ) %>%
+    mutate(across(c("AnnuMeanTemp",
+                    "AnnuPrecip",
+                    "npp"),
+                  ~ na_if(.x, ""))) %>%
+    drop_na(c("AnnuMeanTemp", "AnnuPrecip", "npp", "roughness"))
+  
+  if( nrow(SppRichPerDecade_list[[i]][
+    is.na(SppRichPerDecade_list[[i]]$SppRichness), ]) >= 1) {
+    SppRichPerDecade_list[[i]][
+      is.na(SppRichPerDecade_list[[i]]$SppRichness), ]$SppRichness <- 0
+  }
+    
+}
+
+length(unique(SppRichPerDecade_list[[1]]$Cell_Id110)) # 11190 cells
+length(unique(SppRichPerDecade_list[[2]]$Cell_Id110)) # 11660 cells
+length(unique(SppRichPerDecade_list[[3]]$Cell_Id110)) # 13126 cells
+length(unique(SppRichPerDecade_list[[4]]$Cell_Id110)) # 13134 cells
