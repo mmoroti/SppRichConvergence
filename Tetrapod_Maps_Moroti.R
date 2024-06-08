@@ -1079,6 +1079,15 @@ SpatialTraits <- read.csv2("Datasets/SpatialAttributesPerCell.csv", sep =",")
 npp <- read.csv2("Datasets/npp_values.csv", sep=",")[,2:3]
 roughness <- read.csv2("Datasets/ElevRoughness_values.csv", sep = ",")[,2:3]
 
+# Load the data table on spatial features per grid cell:
+grid_cells <- sf::st_read(dsn="Shapefiles/", layer='gridcells_110km')
+grid_cells <- sf::st_drop_geometry(grid_cells)
+names(grid_cells) <-c ("Cell_Id110", "Long", "Lat", "WWF_Realm", "PropLandArea")
+#grid_cells <- data.table::fread("Datasets/SpatialAttributesPerCell.csv")
+
+# Select only grid cells indicating terrestrial lands:
+grid_cells <- grid_cells[grid_cells$PropLandArea > 0,]
+
 # climate <- read.csv2("Datasets/worldclim_predictors.csv", sep=",")
 # elevation <- read.csv2("Datasets/earthenv_elevmedian.csv", sep=",")
 SpatialAttributesPerCell <- left_join(
@@ -1094,7 +1103,11 @@ SpatialAttributesPerCell <- left_join(
 ) %>%
   rename("roughness" = "roughness_5KMmd_GMTEDmd")
 
-head(SpatialAttributesPerCell)
+SpatialAttributesPerCell <- left_join(
+  x = SpatialAttributesPerCell,
+  y = grid_cells,
+  by = "Cell_Id110"
+)
 
 # add spatial attributes to spp list
 SppRichPerDecade_list <- list(SppRichPerDecade_Amphibians, 
@@ -1116,7 +1129,8 @@ for(i in 1:length(SppRichPerDecade_list)){
                     "AnnuPrecip",
                     "npp"),
                   ~ na_if(.x, ""))) %>%
-    drop_na(c("AnnuMeanTemp", "AnnuPrecip", "npp", "roughness"))
+    drop_na(c("AnnuMeanTemp", "AnnuPrecip", "npp",
+              "roughness", "Lat", "Long"))
   
   if( nrow(SppRichPerDecade_list[[i]][
     is.na(SppRichPerDecade_list[[i]]$SppRichness), ]) >= 1) {
@@ -1126,7 +1140,122 @@ for(i in 1:length(SppRichPerDecade_list)){
     
 }
 
-length(unique(SppRichPerDecade_list[[1]]$Cell_Id110)) # 11190 cells
-length(unique(SppRichPerDecade_list[[2]]$Cell_Id110)) # 11660 cells
-length(unique(SppRichPerDecade_list[[3]]$Cell_Id110)) # 13126 cells
-length(unique(SppRichPerDecade_list[[4]]$Cell_Id110)) # 13134 cells
+length(unique(SppRichPerDecade_list[[1]]$Cell_Id110)) # 11105 cells
+length(unique(SppRichPerDecade_list[[2]]$Cell_Id110)) # 11407 cells
+length(unique(SppRichPerDecade_list[[3]]$Cell_Id110)) # 12862 cells
+length(unique(SppRichPerDecade_list[[4]]$Cell_Id110)) # 12862 cells
+
+# analise
+LastYear <- seq(1800, 2015, by = 5)
+CorrOutput_list <- list()
+
+# Nomes das variáveis para correlação
+variables <- c("AnnuMeanTemp", "AnnuPrecip", "roughness", "npp")
+
+# Loop principal
+for (var in variables) {
+  
+  # Inicializa a lista para armazenar resultados para a variável atual
+  VarCorrOutput_list <- list()
+  
+  for (j in 1:length(SppRichPerDecade_list)) {
+    
+    SppRichPerDecade <- SppRichPerDecade_list[[j]]
+    CorrOutput <- list()  # Lista para armazenar os resultados para o conjunto atual
+    
+    for (i in 1:length(LastYear)) {
+      
+      # Separe os valores de riqueza da década selecionada:
+      SppRich_LastYear <- SppRichPerDecade[which(SppRichPerDecade$LastYear == LastYear[i]),]
+      
+      # Separe um data.frame contendo as coordenadas geográficas:
+      coords <- SppRich_LastYear[, c("Long", "Lat")]
+      
+      # Calcule a correlação com graus de liberdade corrigidos espacialmente:
+      output <- SpatialPack::modified.ttest(x = as.numeric(SppRich_LastYear[[var]]), 
+                                            y = SppRich_LastYear$SppRichness, 
+                                            coords = as.data.frame(coords),
+                                            nclass = NULL)
+      
+      # Armazene as métricas estatísticas em um data.frame, junto com o LastYear avaliado:
+      SpatialCorrOutput <- data.frame(
+        Variable = var,
+        LastYear = LastYear[i],
+        PearsonCorr = output$corr,
+        df = output$dof,
+        Pvalue = output$p.value
+      )
+      
+      CorrOutput[[i]] <- SpatialCorrOutput
+      # Remove objetos desnecessários antes da próxima iteração:
+      rm(SppRich_LastYear, coords, output)
+      
+    } # fim do loop i
+    
+    # Armazene os resultados para o conjunto atual na lista principal
+    VarCorrOutput_list[[j]] <- do.call(rbind, CorrOutput)
+    
+  } # fim do loop j
+  
+  # Armazene os resultados da variável atual na lista principal
+  CorrOutput_list[[var]] <- VarCorrOutput_list
+  
+} # fim do loop principal para variáveis
+
+# CorrOutput_list[[4]][[4]]$Group <- "Mammals"
+CorrOutput_list <- bind_rows(CorrOutput_list, .id = "ID")
+
+# Save correlations dataset 
+save(CorrOutput_list,
+     file = "Datasets/CorrelationsBetweenAbioticTraits.RData")
+
+# Plot 
+# Adicionar uma coluna para definir o preenchimento com base no Pvalue
+CorrOutput_list$Significance <- ifelse(CorrOutput_list$Pvalue <= 0.05,
+                                     "Significant",
+                                     "Not Significant")
+
+palette_colors <- RColorBrewer::brewer.pal(6, "Set2")
+
+plot_abiotictraits <- ggplot(CorrOutput_list,
+       aes(x=LastYear,
+           y=PearsonCorr,
+           color=Variable,
+           fill=Variable)) + 
+  
+  # Pontos com preenchimento baseado na significância
+  geom_point(data = CorrOutput_list[CorrOutput_list$Significance == "Significant",],
+             size = 3, shape = 21) +
+  geom_point(data = CorrOutput_list[CorrOutput_list$Significance == "Not Significant",],
+             size = 3, shape = 21, fill = NA) +
+  
+  # Linha conectando os pontos, colorida por grupo
+  geom_line(aes(group=Variable)) +
+  
+  # Especifica as legendas
+  ylab(bquote('Correlation between richness patterns')) + 
+  xlab(bquote('Year')) +
+  
+  # Outras estéticas
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        plot.margin = unit(c(0.2, 0, 0, 0), "cm"), # top right bottom left
+        axis.line = element_line(colour="black"),
+        axis.ticks = element_line(colour="black"),
+        axis.text.y = element_text(size=10, colour="black"),
+        axis.text.x = element_text(size=10, colour="black", hjust=0.5),
+        axis.title = element_text(size=12, 
+                                  margin=ggplot2::margin(t=0, r=5, b=0, l=0),
+                                  colour="black", face="bold"),
+        legend.position="right") +
+  scale_fill_manual(values = palette_colors) +
+  scale_color_manual(values = palette_colors) +
+  theme_minimal_grid(12) + 
+  facet_wrap(~ Group)
+
+# Export to disk:
+ggsave(filename="Figures/Scatterplot_RichnessAbioticTraitsAcrossTime.png",
+       plot=plot_abiotictraits, width=6, height=5,
+       units="in", bg="white", limitsize=F)
